@@ -8,8 +8,9 @@
     "aegismemory": "./bin/aegismemory.js"
   },
   "scripts": {
-    "test": "node --test test/*.test.js",
-    "test:all": "node test/toon-demo.js && node test/cost-analysis.js",
+    "test": "node test/cryptoBox.test.js && node test/toon.test.js && node test/util.test.js && node test/chain.test.js",
+    "test:demo": "node test/toon-demo.js",
+    "test:cost": "node test/cost-analysis.js",
     "lint": "echo \"✓ Linting passed (ESLint not configured)\"",
     "start": "node index.js"
   },
@@ -28,12 +29,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/aegismemory.git"
+    "url": "https://github.com/Xenian84/aegismemory.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/aegismemory/issues"
+    "url": "https://github.com/Xenian84/aegismemory/issues"
   },
-  "homepage": "https://github.com/yourusername/aegismemory#readme",
+  "homepage": "https://github.com/Xenian84/aegismemory#readme",
   "engines": {
     "node": ">=18.0.0"
   },
