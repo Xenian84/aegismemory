@@ -291,3 +291,4 @@ const aegismemoryPlugin = {
 };
 
 export default aegismemoryPlugin;
+export const register = aegismemoryPlugin.register;

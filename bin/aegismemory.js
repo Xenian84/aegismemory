@@ -23,6 +23,7 @@ const commands = {
   verify,
   search,
   export: exportMemory,
+  view: viewMemory,
   'replay-queue': replayQueue,
   anchor: manualAnchor,
   help
@@ -54,6 +55,16 @@ async function status() {
   
   console.log('\n=== AegisMemory Status ===\n');
   console.log(`Wallet: ${config.walletPubkey}`);
+  
+  // Check Solana balance
+  try {
+    const { execSync } = await import('child_process');
+    const balance = execSync(`solana balance ${config.walletPubkey} --url ${config.anchorRpcUrl}`, { encoding: 'utf8' }).trim();
+    console.log(`Balance: ${balance}`);
+  } catch (error) {
+    console.log(`Balance: Unable to check (solana CLI not available)`);
+  }
+  
   console.log(`Agent ID: ${config.agentId}`);
   console.log(`Vault URL: ${config.baseUrl}`);
   console.log(`Anchor Enabled: ${config.anchorEnabled}`);
@@ -64,6 +75,9 @@ async function status() {
   
   console.log(`\nState:`);
   const agents = state.getAllAgents();
+  let totalCIDs = 0;
+  let totalAnchored = 0;
+  
   if (agents.length === 0) {
     console.log('  No agents tracked yet');
   } else {
@@ -74,18 +88,30 @@ async function status() {
       console.log(`    Last CID: ${agentState.lastCid || 'none'}`);
       console.log(`    Last SHA256: ${agentState.lastPlaintextSha256?.slice(0, 16) || 'none'}...`);
       console.log(`    Last Anchored: ${agentState.lastAnchoredDate || 'never'}`);
+      
+      // Count CIDs from branches
+      if (agentState.branches && agentState.branches.main && agentState.branches.main.cids) {
+        totalCIDs += agentState.branches.main.cids.length;
+      }
+      if (agentState.lastAnchoredDate && agentState.lastAnchoredDate !== 'never') {
+        totalAnchored++;
+      }
     }
   }
   
   console.log(`\nMetrics:`);
   const allMetrics = metrics.getAll();
-  if (Object.keys(allMetrics.counters).length === 0) {
-    console.log('  No metrics yet');
-  } else {
+  if (totalCIDs > 0 || totalAnchored > 0) {
+    console.log(`  📊 ${totalCIDs} CIDs, ${totalAnchored} anchored`);
+  }
+  if (Object.keys(allMetrics.counters).length > 0) {
     console.log('  Counters:');
     for (const [key, value] of Object.entries(allMetrics.counters)) {
       console.log(`    ${key}: ${value}`);
     }
+  }
+  if (totalCIDs === 0 && Object.keys(allMetrics.counters).length === 0) {
+    console.log('  No metrics yet');
   }
   
   console.log();
@@ -129,8 +155,8 @@ async function recall(args) {
     console.log(`Date: ${agentState.lastAnchoredDate || 'Not anchored yet'}`);
     console.log(`\nFetching from IPFS...\n`);
     
-    const encryptedJson = await ipfsFetcher.fetch(cid);
-    const encryptedPayload = JSON.parse(encryptedJson);
+    const encryptedText = await ipfsFetcher.fetch(cid);
+    const encryptedPayload = JSON.parse(encryptedText);
     
     console.log('Decrypting...\n');
     const plaintext = await decryptPayload(
@@ -154,10 +180,13 @@ async function recall(args) {
     console.log(`Session: ${doc.session_id || 'N/A'}`);
     
     if (doc.content && doc.content.messages) {
-      console.log(`\nMessages (${doc.content.messages.length}):`);
+      console.log(`\n💬 Messages (${doc.content.messages.length}):`);
       doc.content.messages.forEach((msg, i) => {
-        console.log(`\n${i + 1}. ${msg.role}:`);
-        console.log(`   ${msg.content.substring(0, 200)}${msg.content.length > 200 ? '...' : ''}`);
+        const preview = msg.content?.substring(0, 150) || '';
+        const keywords = preview.match(/\b[A-Z][a-z]+\b/g)?.slice(0, 5).join(', ') || 'N/A';
+        console.log(`\n${i + 1}. [${msg.role}]`);
+        console.log(`   ${preview}${msg.content.length > 150 ? '...' : ''}`);
+        console.log(`   🔑 Keywords: ${keywords}`);
       });
     }
     
@@ -171,11 +200,19 @@ async function recall(args) {
  * Verify command
  */
 async function verify(args) {
-  const cid = args.find(a => a.startsWith('--cid='))?.split('=')[1];
+  // Support both --cid=QmX and --cid QmX formats
+  let cid = args.find(a => a.startsWith('--cid='))?.split('=')[1];
+  if (!cid) {
+    const cidIndex = args.findIndex(a => a === '--cid');
+    if (cidIndex >= 0 && args[cidIndex + 1]) {
+      cid = args[cidIndex + 1];
+    }
+  }
   const checkRpc = args.includes('--rpc');
   
   if (!cid) {
-    console.error('Usage: aegismemory verify --cid=<cid> [--rpc]');
+    console.error('Usage: aegismemory verify --cid <cid> [--rpc]');
+    console.error('   or: aegismemory verify --cid=<cid> [--rpc]');
     process.exit(1);
   }
   
@@ -186,8 +223,8 @@ async function verify(args) {
   const ipfsFetcher = new IpfsFetcher(config.ipfsGatewayUrls, logger, metrics);
   
   // Fetch encrypted payload
-  const encryptedJson = await ipfsFetcher.fetch(cid);
-  const encryptedPayload = JSON.parse(encryptedJson);
+  const encryptedText = await ipfsFetcher.fetch(cid);
+  const encryptedPayload = JSON.parse(encryptedText);
   
   // Get previous document if available
   const plaintext = await decryptPayload(
@@ -210,8 +247,8 @@ async function verify(args) {
   let previousDoc = null;
   if (doc.prev_cid) {
     try {
-      const prevEncryptedJson = await ipfsFetcher.fetch(doc.prev_cid);
-      const prevEncryptedPayload = JSON.parse(prevEncryptedJson);
+      const prevEncryptedText = await ipfsFetcher.fetch(doc.prev_cid);
+      const prevEncryptedPayload = JSON.parse(prevEncryptedText);
       const prevPlaintext = await decryptPayload(
         prevEncryptedPayload,
         config.walletSecretKeyBase58,
@@ -291,11 +328,27 @@ async function verify(args) {
  * Export command
  */
 async function exportMemory(args) {
-  const cid = args.find(a => a.startsWith('--cid='))?.split('=')[1];
-  const outFile = args.find(a => a.startsWith('--out='))?.split('=')[1];
+  // Support both --cid=QmX and --cid QmX formats
+  let cid = args.find(a => a.startsWith('--cid='))?.split('=')[1];
+  if (!cid) {
+    const cidIndex = args.findIndex(a => a === '--cid');
+    if (cidIndex >= 0 && args[cidIndex + 1] && !args[cidIndex + 1].startsWith('--')) {
+      cid = args[cidIndex + 1];
+    }
+  }
+  
+  // Support both --out=file and --out file formats
+  let outFile = args.find(a => a.startsWith('--out='))?.split('=')[1];
+  if (!outFile) {
+    const outIndex = args.findIndex(a => a === '--out');
+    if (outIndex >= 0 && args[outIndex + 1]) {
+      outFile = args[outIndex + 1];
+    }
+  }
   
   if (!cid) {
-    console.error('Usage: aegismemory export --cid=<cid> --out=<file>');
+    console.error('Usage: aegismemory export --cid <cid> [--out <file>]');
+    console.error('   or: aegismemory export --cid=<cid> [--out=<file>]');
     process.exit(1);
   }
   
@@ -305,8 +358,8 @@ async function exportMemory(args) {
   
   const ipfsFetcher = new IpfsFetcher(config.ipfsGatewayUrls, logger, metrics);
   
-  const encryptedJson = await ipfsFetcher.fetch(cid);
-  const encryptedPayload = JSON.parse(encryptedJson);
+  const encryptedText = await ipfsFetcher.fetch(cid);
+  const encryptedPayload = JSON.parse(encryptedText);
   const plaintext = await decryptPayload(
     encryptedPayload,
     config.walletSecretKeyBase58,
@@ -320,6 +373,280 @@ async function exportMemory(args) {
   } else {
     console.log(plaintext);
   }
+}
+
+/**
+ * View command - Create HTML chat dump and open in browser
+ */
+async function viewMemory(args) {
+  // Support both --cid=QmX and --cid QmX formats
+  let cid = args.find(a => a.startsWith('--cid='))?.split('=')[1];
+  if (!cid) {
+    const cidIndex = args.findIndex(a => a === '--cid');
+    if (cidIndex >= 0 && args[cidIndex + 1] && !args[cidIndex + 1].startsWith('--')) {
+      cid = args[cidIndex + 1];
+    }
+  }
+  
+  if (!cid) {
+    console.error('Usage: aegismemory view --cid <cid>');
+    console.error('   or: aegismemory view --cid=<cid>');
+    process.exit(1);
+  }
+  
+  const { config, logger } = await init();
+  
+  console.log(`\nFetching memory: ${cid}\n`);
+  
+  const ipfsFetcher = new IpfsFetcher(config.ipfsGatewayUrls, logger, metrics);
+  
+  const encryptedText = await ipfsFetcher.fetch(cid);
+  const encryptedPayload = JSON.parse(encryptedText);
+  const plaintext = await decryptPayload(
+    encryptedPayload,
+    config.walletSecretKeyBase58,
+    config.cacheKeyTtlMs
+  );
+  
+  // Parse based on format
+  let doc;
+  if (plaintext.startsWith('@aegismemory')) {
+    const { fromTOON } = await import('../lib/toon.js');
+    doc = fromTOON(plaintext);
+  } else {
+    doc = JSON.parse(plaintext);
+  }
+  
+  // Generate HTML
+  const html = generateChatHTML(doc, cid);
+  
+  // Save to /tmp/convo.html
+  const { writeFileSync } = await import('fs');
+  const outputPath = '/tmp/convo.html';
+  writeFileSync(outputPath, html, 'utf8');
+  
+  console.log(`✅ Chat dump saved to: ${outputPath}\n`);
+  
+  // Open in browser
+  try {
+    const { execSync } = await import('child_process');
+    const platform = process.platform;
+    
+    if (platform === 'darwin') {
+      execSync(`open ${outputPath}`);
+    } else if (platform === 'linux') {
+      execSync(`xdg-open ${outputPath} 2>/dev/null || sensible-browser ${outputPath} 2>/dev/null || echo "Please open ${outputPath} manually"`);
+    } else if (platform === 'win32') {
+      execSync(`start ${outputPath}`);
+    }
+    
+    console.log('🌐 Opening in browser...\n');
+  } catch (error) {
+    console.log(`⚠️  Could not auto-open browser. Please open manually:\n   file://${outputPath}\n`);
+  }
+}
+
+/**
+ * Generate HTML chat dump
+ */
+function generateChatHTML(doc, cid) {
+  const messages = doc.content?.messages || [];
+  const date = doc.date || 'Unknown date';
+  const agentId = doc.agent_id || 'Unknown agent';
+  
+  // User color mapping
+  const userColors = {
+    'user': '#4A90E2',
+    'assistant': '#7B68EE',
+    'system': '#95A5A6',
+    'Xenian': '#E74C3C',
+    'Tachyon': '#2ECC71'
+  };
+  
+  const messagesHTML = messages.map((msg, idx) => {
+    const timestamp = msg.timestamp ? new Date(msg.timestamp).toLocaleString() : '';
+    const role = msg.role || 'unknown';
+    const userName = role === 'user' ? 'Xenian' : (role === 'assistant' ? 'Tachyon' : role);
+    const color = userColors[userName] || userColors[role] || '#34495E';
+    const content = (msg.content || '').replace(/\n/g, '<br>');
+    
+    return `
+    <div class="message">
+      <div class="message-header">
+        <span class="username" style="color: ${color};">### ${userName}</span>
+        <span class="timestamp">${timestamp}</span>
+      </div>
+      <div class="message-content">${content}</div>
+    </div>`;
+  }).join('\n');
+  
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AegisMemory Chat - ${date}</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      overflow: hidden;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 30px;
+      text-align: center;
+    }
+    
+    .header h1 {
+      font-size: 28px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    
+    .header .shield {
+      font-size: 32px;
+    }
+    
+    .header .meta {
+      font-size: 14px;
+      opacity: 0.9;
+      margin-top: 10px;
+    }
+    
+    .header .cid {
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      opacity: 0.8;
+      margin-top: 5px;
+      word-break: break-all;
+    }
+    
+    .messages {
+      padding: 30px;
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+    
+    .message {
+      margin-bottom: 25px;
+      animation: fadeIn 0.3s ease-in;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .message-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      padding-bottom: 5px;
+      border-bottom: 2px solid #f0f0f0;
+    }
+    
+    .username {
+      font-weight: 600;
+      font-size: 16px;
+    }
+    
+    .timestamp {
+      font-size: 12px;
+      color: #95a5a6;
+    }
+    
+    .message-content {
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      line-height: 1.6;
+      color: #2c3e50;
+    }
+    
+    .footer {
+      background: #f8f9fa;
+      padding: 20px;
+      text-align: center;
+      color: #7f8c8d;
+      font-size: 12px;
+      border-top: 1px solid #e0e0e0;
+    }
+    
+    .footer a {
+      color: #667eea;
+      text-decoration: none;
+    }
+    
+    .footer a:hover {
+      text-decoration: underline;
+    }
+    
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: #f1f1f1;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: #667eea;
+      border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+      background: #764ba2;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>
+        <span class="shield">🛡️</span>
+        AegisMemory Chat
+      </h1>
+      <div class="meta">
+        <strong>${agentId}</strong> • ${date} • ${messages.length} messages
+      </div>
+      <div class="cid">CID: ${cid}</div>
+    </div>
+    
+    <div class="messages">
+      ${messagesHTML || '<div class="message"><div class="message-content">No messages found</div></div>'}
+    </div>
+    
+    <div class="footer">
+      <p>Generated by <strong>AegisMemory</strong> 🛡️</p>
+      <p>Encrypted memory storage with on-chain anchoring on X1 Blockchain</p>
+      <p><a href="https://explorer.x1.xyz" target="_blank">View on X1 Explorer</a></p>
+    </div>
+  </div>
+</body>
+</html>`;
 }
 
 /**
@@ -366,10 +693,18 @@ async function replayQueue() {
  * Manual anchor command
  */
 async function manualAnchor(args) {
-  const cid = args.find(a => a.startsWith('--cid='))?.split('=')[1];
+  // Support both --cid=QmX and --cid QmX formats
+  let cid = args.find(a => a.startsWith('--cid='))?.split('=')[1];
+  if (!cid) {
+    const cidIndex = args.findIndex(a => a === '--cid');
+    if (cidIndex >= 0 && args[cidIndex + 1]) {
+      cid = args[cidIndex + 1];
+    }
+  }
   
   if (!cid) {
-    console.error('Usage: aegismemory anchor --cid=<cid>');
+    console.error('Usage: aegismemory anchor --cid <cid>');
+    console.error('   or: aegismemory anchor --cid=<cid>');
     process.exit(1);
   }
   
@@ -384,14 +719,22 @@ async function manualAnchor(args) {
   
   const ipfsFetcher = new IpfsFetcher(config.ipfsGatewayUrls, logger, metrics);
   
-  const encryptedJson = await ipfsFetcher.fetch(cid);
-  const encryptedPayload = JSON.parse(encryptedJson);
+  const encryptedText = await ipfsFetcher.fetch(cid);
+  const encryptedPayload = JSON.parse(encryptedText);
   const plaintext = await decryptPayload(
     encryptedPayload,
     config.walletSecretKeyBase58,
     config.cacheKeyTtlMs
   );
-  const doc = JSON.parse(plaintext);
+  
+  // Handle both JSON and TOON formats
+  let doc;
+  if (plaintext.startsWith('@aegismemory')) {
+    const { fromTOON } = await import('../lib/toon.js');
+    doc = fromTOON(plaintext);
+  } else {
+    doc = JSON.parse(plaintext);
+  }
   
   const anchor = new AegisAnchor(config, logger, metrics, state);
   
@@ -404,11 +747,16 @@ async function manualAnchor(args) {
     doc.agent_id
   );
   
-  console.log('Anchor submitted:');
-  console.log(`  Signature: ${result.signature}`);
-  console.log(`  Slot: ${result.slot}`);
-  console.log(`  Block Time: ${result.blockTime}`);
-  console.log();
+  console.log('✅ Anchor submitted successfully!\n');
+  console.log(`Transaction Signature:`);
+  console.log(`  ${result.signature}\n`);
+  console.log(`Slot: ${result.slot}`);
+  console.log(`Block Time: ${result.blockTime}\n`);
+  console.log(`🔍 View on Explorer:`);
+  console.log(`  https://explorer.x1.xyz/tx/${result.signature}\n`);
+  console.log(`📝 Memo Payload:`);
+  const payload = anchor.buildPayload(cid, doc.plaintext_sha256, doc.prev_plaintext_sha256, doc.date);
+  console.log(`  ${payload}\n`);
 }
 
 /**
@@ -426,24 +774,28 @@ Commands:
     --limit=N         Number of memories to recall (default: 10)
   
   verify              Verify a memory document
-    --cid=<cid>       CID to verify (required)
+    --cid <cid>       CID to verify (required)
     --rpc             Also verify on-chain anchor
   
   search              Search memories by natural language query
     <query>           Search query (required)
-    --limit=N         Number of results (default: 10)
-    --agent=<id>      Filter by agent ID (optional)
-    --min-score=N     Minimum relevance score 0-1 (default: 0.5)
+    --limit N         Number of results (default: 10)
+    --agent <id>      Filter by agent ID (optional)
+    --min-score N     Minimum relevance score 0-1 (default: 0.5)
     --json            Output as JSON
   
   export              Export decrypted memory
-    --cid=<cid>       CID to export (required)
-    --out=<file>      Output file (optional, prints to stdout if omitted)
+    --cid <cid>       CID to export (required)
+    --out <file>      Output file (optional, prints to stdout if omitted)
+  
+  view                View memory as HTML chat dump
+    --cid <cid>       CID to view (required)
+                      Saves to /tmp/convo.html and opens in browser
   
   replay-queue        Replay all pending queue jobs
   
   anchor              Manually anchor a memory
-    --cid=<cid>       CID to anchor (required)
+    --cid <cid>       CID to anchor (required)
   
   help                Show this help message
 
@@ -452,12 +804,15 @@ Environment:
 
 Examples:
   aegismemory status
-  aegismemory recall --limit=5
-  aegismemory verify --cid=Qm... --rpc
-  aegismemory search "validator requirements" --limit=5
-  aegismemory search "X1 network" --agent=theo --min-score=0.7
-  aegismemory export --cid=Qm... --out=memory.json
-  aegismemory anchor --cid=Qm...
+  aegismemory recall --limit 5
+  aegismemory verify --cid Qm... --rpc
+  aegismemory search "validator requirements" --limit 5
+  aegismemory search "X1 network" --agent theo --min-score 0.7
+  aegismemory export --cid Qm... --out memory.json
+  aegismemory view --cid Qm...
+  aegismemory anchor --cid Qm...
+
+Note: Both --flag value and --flag=value formats are supported
 `);
 }
 
