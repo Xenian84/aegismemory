@@ -4,12 +4,14 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org/)
+[![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](https://github.com/Xenian84/aegismemory/releases)
 [![Status](https://img.shields.io/badge/status-production-success)](https://github.com/Xenian84/aegismemory)
 
 ---
 
 ## 🚀 Features
 
+### Core Features
 - 🔐 **End-to-End Encryption**: AES-256-GCM with wallet-derived keys
 - ⛓️ **On-Chain Anchoring**: Immutable proofs on X1 Blockchain
 - 💾 **IPFS Storage**: Free decentralized storage via X1 Vault
@@ -18,6 +20,16 @@
 - ⚡ **Durable Queue**: Persistent job queue with automatic retries
 - 🎯 **OpenClaw Integration**: Seamless memory slot provider
 - 💰 **Cost Effective**: Only 0.002 XNT per memory anchor
+
+### v2.1 Features (NEW)
+- 🔍 **Semantic Search**: Natural language memory search with vector embeddings
+- 🤝 **Cross-Agent Memory**: Permission-based memory sharing between agents
+- ⏰ **Ephemeral Memories**: Auto-expiring memories for privacy and cost savings
+- 🌳 **Memory Branches**: Multiple memory chains for different contexts
+- 🌐 **HTML Chat Viewer**: Beautiful HTML dumps with colors and timestamps
+- 💰 **Balance Check**: Integrated Solana wallet balance display
+- 🔗 **Explorer Links**: Direct links to X1 blockchain explorer
+- 🔑 **Keyword Extraction**: Automatic keyword detection in memories
 
 ---
 
@@ -187,18 +199,43 @@ Verifies CID integrity (decryption, hash, chain, anchor).
 ### Recall
 
 ```bash
-./bin/aegismemory.js recall --limit=5
+./bin/aegismemory.js recall --limit 5
 ```
 
-Fetches and decrypts recent memories.
+Fetches and decrypts recent memories with keyword extraction.
+
+### Search (NEW v2.1)
+
+```bash
+./bin/aegismemory.js search "validator requirements" --limit 5
+./bin/aegismemory.js search "X1 network" --agent theo --min-score 0.7
+```
+
+Natural language semantic search across all memories.
+
+### View (NEW v2.1)
+
+```bash
+./bin/aegismemory.js view --cid QmX...
+```
+
+Generate beautiful HTML chat dump with colors and timestamps. Saves to `/tmp/convo.html` and opens in browser.
 
 ### Export
 
 ```bash
-./bin/aegismemory.js export > backup.json
+./bin/aegismemory.js export --cid QmX... --out backup.json
 ```
 
-Exports state to JSON for backup.
+Exports decrypted memory to JSON.
+
+### Verify
+
+```bash
+./bin/aegismemory.js verify --cid QmX... --rpc
+```
+
+Verify memory integrity and on-chain anchor.
 
 ### Replay Queue
 
@@ -211,10 +248,60 @@ Manually processes pending queue jobs.
 ### Anchor
 
 ```bash
-./bin/aegismemory.js anchor --cid=<CID> --sha256=<SHA256>
+./bin/aegismemory.js anchor --cid QmX...
 ```
 
-Manually anchors a memory to X1 Blockchain.
+Manually anchors a memory to X1 Blockchain. Shows transaction signature and explorer link.
+
+**Note**: Both `--flag value` and `--flag=value` formats are supported.
+
+---
+
+## 🆕 What's New in v2.1
+
+### Semantic Search
+Search memories by natural language instead of just dates:
+```bash
+aegismemory search "blockchain consensus mechanisms"
+```
+- Vector embeddings (384-dimensional)
+- Relevance scoring (0-1)
+- Agent filtering
+- Auto-indexing on save
+
+### Cross-Agent Memory Sharing
+Share memories between agents with permissions:
+- Grant/revoke access
+- Read-only permissions
+- Encrypted key sharing
+- Collective intelligence network
+
+### Ephemeral Memories
+Auto-expiring memories for privacy and cost savings:
+- Temporary session data
+- No IPFS upload or anchoring
+- Free storage
+- GDPR compliance
+
+### Memory Branches
+Multiple memory chains for different contexts:
+- Separate work/personal memories
+- Project isolation
+- Branch merging
+- Context switching
+
+### HTML Chat Viewer
+Beautiful visual memory viewer:
+- Color-coded users (Xenian: Red, Tachyon: Green)
+- Full timestamps
+- Responsive design
+- Auto-opens in browser
+
+### Enhanced CLI
+- Solana balance check in status
+- Explorer links in anchor output
+- Keyword extraction in recall
+- Flexible flag formats (`--flag value` or `--flag=value`)
 
 ---
 
