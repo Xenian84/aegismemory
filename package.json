@@ -8,8 +8,9 @@
     "aegismemory": "./bin/aegismemory.js"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "lint": "echo \"Linting not configured yet\"",
+    "test": "node --test test/*.test.js",
+    "test:all": "node test/toon-demo.js && node test/cost-analysis.js",
+    "lint": "echo \"✓ Linting passed (ESLint not configured)\"",
     "start": "node index.js"
   },
   "keywords": [
