@@ -21,6 +21,7 @@ const commands = {
   status,
   recall,
   verify,
+  search,
   export: exportMemory,
   'replay-queue': replayQueue,
   anchor: manualAnchor,
@@ -428,6 +429,13 @@ Commands:
     --cid=<cid>       CID to verify (required)
     --rpc             Also verify on-chain anchor
   
+  search              Search memories by natural language query
+    <query>           Search query (required)
+    --limit=N         Number of results (default: 10)
+    --agent=<id>      Filter by agent ID (optional)
+    --min-score=N     Minimum relevance score 0-1 (default: 0.5)
+    --json            Output as JSON
+  
   export              Export decrypted memory
     --cid=<cid>       CID to export (required)
     --out=<file>      Output file (optional, prints to stdout if omitted)
@@ -446,9 +454,107 @@ Examples:
   aegismemory status
   aegismemory recall --limit=5
   aegismemory verify --cid=Qm... --rpc
+  aegismemory search "validator requirements" --limit=5
+  aegismemory search "X1 network" --agent=theo --min-score=0.7
   aegismemory export --cid=Qm... --out=memory.json
   aegismemory anchor --cid=Qm...
 `);
+}
+
+/**
+ * Search command
+ */
+async function search(args) {
+  const query = args.find(a => !a.startsWith('--'));
+  if (!query) {
+    console.error('Usage: aegismemory search <query> [--limit=N] [--agent=ID] [--min-score=N] [--json]');
+    console.error('');
+    console.error('Examples:');
+    console.error('  aegismemory search "validator requirements"');
+    console.error('  aegismemory search "X1 network" --limit=5');
+    console.error('  aegismemory search "setup guide" --agent=theo');
+    console.error('  aegismemory search "blockchain" --min-score=0.7');
+    process.exit(1);
+  }
+
+  const limit = parseInt(args.find(a => a.startsWith('--limit='))?.split('=')[1]) || 10;
+  const agentId = args.find(a => a.startsWith('--agent='))?.split('=')[1];
+  const minScore = parseFloat(args.find(a => a.startsWith('--min-score='))?.split('=')[1]) || 0.5;
+  const jsonOutput = args.includes('--json');
+
+  const { config, logger } = await init();
+
+  // Initialize semantic search components
+  const { EmbeddingGenerator } = await import('../lib/embeddings.js');
+  const { VectorDB } = await import('../lib/vectorDB.js');
+  const { SemanticSearch } = await import('../lib/search.js');
+  const { IpfsFetcher } = await import('../lib/ipfsFetch.js');
+
+  console.log('\n🔍 Initializing semantic search...\n');
+
+  const embeddings = new EmbeddingGenerator(logger);
+  await embeddings.init();
+
+  const vectorDB = new VectorDB(config, logger);
+  await vectorDB.init();
+
+  const ipfsFetch = new IpfsFetcher(config, logger);
+  const semanticSearch = new SemanticSearch(config, embeddings, vectorDB, ipfsFetch, logger);
+
+  // Perform search
+  console.log(`Searching for: "${query}"\n`);
+
+  try {
+    const results = await semanticSearch.search(query, { limit, agentId, minScore });
+
+    if (jsonOutput) {
+      console.log(JSON.stringify(results, null, 2));
+      return;
+    }
+
+    if (results.length === 0) {
+      console.log('No results found.');
+      console.log('\nTips:');
+      console.log('  - Try a different query');
+      console.log('  - Lower --min-score (default: 0.5)');
+      console.log('  - Check if memories are indexed (use "status" command)');
+      return;
+    }
+
+    console.log(`Found ${results.length} memories:\n`);
+
+    results.forEach((memory, i) => {
+      const date = new Date(memory.timestamp).toISOString();
+      const score = (memory.relevance_score * 100).toFixed(0);
+      
+      console.log(`${i + 1}. [${date}] (relevance: ${score}%)`);
+      console.log(`   CID: ${memory.cid}`);
+      
+      if (memory.role) {
+        console.log(`   Role: ${memory.role}`);
+      }
+      if (memory.name) {
+        console.log(`   Name: ${memory.name}`);
+      }
+      
+      if (memory.content) {
+        const preview = memory.content.length > 200 
+          ? memory.content.substring(0, 200) + '...'
+          : memory.content;
+        console.log(`   Content: ${preview}`);
+      }
+      
+      console.log('');
+    });
+
+    console.log(`\nSearch complete. Use --json for full output.`);
+  } catch (error) {
+    console.error(`\n❌ Search failed: ${error.message}`);
+    if (error.stack) {
+      console.error(error.stack);
+    }
+    process.exit(1);
+  }
 }
 
 /**

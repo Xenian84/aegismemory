@@ -8,6 +8,8 @@ import { loadConfig } from "./lib/config.js";
 import { createLogger } from "./lib/logger.js";
 import { State } from "./lib/state.js";
 import { Queue } from "./lib/queue.js";
+import { EmbeddingGenerator } from "./lib/embeddings.js";
+import { VectorDB } from "./lib/vectorDB.js";
 import { homedir } from "os";
 import { join } from "path";
 
