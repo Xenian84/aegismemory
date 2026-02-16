@@ -1,0 +1,33 @@
+# Test files
+test-*.js
+*-test.js
+*.test.js
+
+# Documentation (keep in npm package)
+# None - we want all docs
+
+# Development files
+.cursor/
+.vscode/
+*.log
+
+# Git files
+.git/
+.gitignore
+.gitattributes
+
+# CI files
+.github/
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.idea/
+*.iml

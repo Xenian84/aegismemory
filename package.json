@@ -1,0 +1,51 @@
+{
+  "name": "aegismemory",
+  "version": "1.0.0",
+  "description": "Production-grade encrypted memory storage for OpenClaw with CID chaining and on-chain anchoring on X1 Blockchain",
+  "main": "index.js",
+  "type": "module",
+  "bin": {
+    "aegismemory": "./bin/aegismemory.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "echo \"Linting not configured yet\"",
+    "start": "node index.js"
+  },
+  "keywords": [
+    "openclaw",
+    "plugin",
+    "memory",
+    "encryption",
+    "ipfs",
+    "blockchain",
+    "x1",
+    "solana",
+    "decentralized"
+  ],
+  "author": "AegisMemory Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/aegismemory.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/aegismemory/issues"
+  },
+  "homepage": "https://github.com/yourusername/aegismemory#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@noble/ed25519": "^2.1.0",
+    "@noble/hashes": "^2.0.1",
+    "@solana/web3.js": "^1.95.0",
+    "bs58": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.3",
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.5",
+    "typescript": "^5.9.3"
+  }
+}

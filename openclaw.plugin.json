@@ -1,0 +1,176 @@
+{
+  "id": "aegismemory",
+  "name": "AegisMemory",
+  "version": "1.0.0",
+  "description": "Production encrypted memory storage with CID chaining and on-chain anchoring",
+  "kind": "memory",
+  "entrypoint": "./index.js",
+  "author": "AegisMemory Contributors",
+  "repository": "https://github.com/yourusername/aegismemory",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "baseUrl": {
+        "type": "string",
+        "default": "https://vault.x1.xyz/ipfs",
+        "description": "X1 Vault base URL"
+      },
+      "ipfsGatewayUrls": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": [
+          "https://vault.x1.xyz/ipfs"
+        ],
+        "description": "IPFS gateway URLs (add fallbacks like ipfs.io or cloudflare-ipfs.com for redundancy)"
+      },
+      "walletPubkey": {
+        "type": "string",
+        "description": "Wallet public key (base58)",
+        "sensitive": false
+      },
+      "walletSecretKeyBase58": {
+        "type": "string",
+        "description": "Wallet secret key (base58)",
+        "sensitive": true
+      },
+      "agentId": {
+        "type": "string",
+        "default": "theo",
+        "description": "Default agent ID"
+      },
+      "memoryPrefix": {
+        "type": "string",
+        "default": "memory/",
+        "description": "Filename prefix for memory uploads"
+      },
+      "recallEnabled": {
+        "type": "boolean",
+        "default": true,
+        "description": "Enable memory recall on agent start"
+      },
+      "addEnabled": {
+        "type": "boolean",
+        "default": true,
+        "description": "Enable memory saving on agent end"
+      },
+      "captureStrategy": {
+        "type": "string",
+        "enum": ["last_turn", "full_session"],
+        "default": "last_turn",
+        "description": "Memory capture strategy"
+      },
+      "memoryLimitNumber": {
+        "type": "number",
+        "default": 10,
+        "description": "Maximum number of memories to recall"
+      },
+      "maxMessageChars": {
+        "type": "number",
+        "default": 50000,
+        "description": "Maximum characters per message"
+      },
+      "maxPrependChars": {
+        "type": "number",
+        "default": 20000,
+        "description": "Maximum characters for prepend context"
+      },
+      "fetchConcurrency": {
+        "type": "number",
+        "default": 4,
+        "description": "Concurrent CID fetches"
+      },
+      "cacheKeyTtlMs": {
+        "type": "number",
+        "default": 600000,
+        "description": "AES key cache TTL in milliseconds"
+      },
+      "statePath": {
+        "type": "string",
+        "default": "~/.openclaw/aegismemory/state.json",
+        "description": "Path to state file"
+      },
+      "queuePath": {
+        "type": "string",
+        "default": "~/.openclaw/aegismemory/queue.jsonl",
+        "description": "Path to queue file"
+      },
+      "workerIntervalMs": {
+        "type": "number",
+        "default": 2000,
+        "description": "Queue worker interval in milliseconds"
+      },
+      "maxRetries": {
+        "type": "number",
+        "default": 6,
+        "description": "Maximum retry attempts"
+      },
+      "anchorEnabled": {
+        "type": "boolean",
+        "default": false,
+        "description": "Enable on-chain anchoring"
+      },
+      "anchorFrequency": {
+        "type": "string",
+        "enum": ["every_save", "daily"],
+        "default": "daily",
+        "description": "Anchor frequency"
+      },
+      "anchorProgram": {
+        "type": "string",
+        "default": "memo",
+        "description": "Anchor program (memo)"
+      },
+      "anchorRpcUrl": {
+        "type": "string",
+        "default": "https://rpc.mainnet.x1.xyz",
+        "description": "Primary RPC URL for anchoring (X1 mainnet)"
+      },
+      "anchorRpcFallbackUrls": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": [
+          "https://rpc.mainnet.x1.xyz",
+          "https://rpc.testnet.x1.xyz"
+        ],
+        "description": "Fallback RPC URLs for anchoring (will try in order if primary fails)"
+      },
+      "anchorWalletSecretKeyBase58": {
+        "type": "string",
+        "description": "Dedicated anchor wallet secret key (base58)",
+        "sensitive": true
+      },
+      "confirmCommitment": {
+        "type": "string",
+        "enum": ["processed", "confirmed", "finalized"],
+        "default": "confirmed",
+        "description": "Transaction confirmation commitment"
+      },
+      "priorityFeeMicrolamports": {
+        "type": "number",
+        "description": "Priority fee in microlamports"
+      },
+      "anchorTimeoutMs": {
+        "type": "number",
+        "default": 8000,
+        "description": "Anchor timeout in milliseconds"
+      },
+      "derivationMsg": {
+        "type": "string",
+        "default": "IPFS_ENCRYPTION_KEY_V1",
+        "description": "Key derivation message"
+      },
+      "enableMemorySlot": {
+        "type": "boolean",
+        "default": false,
+        "description": "Enable as memory-slot backend provider"
+      },
+      "memoryFormat": {
+        "type": "string",
+        "enum": ["json", "toon"],
+        "default": "json",
+        "description": "Memory storage format: json (standard) or toon (46% smaller, more readable)"
+      }
+    },
+    "required": []
+  }
+}
