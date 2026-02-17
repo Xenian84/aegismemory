@@ -1,6 +1,6 @@
 {
   "name": "aegismemory",
-  "version": "1.0.0",
+  "version": "2.1.0",
   "description": "Production-grade encrypted memory storage for OpenClaw with CID chaining and on-chain anchoring on X1 Blockchain",
   "main": "index.js",
   "type": "module",
