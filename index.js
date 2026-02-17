@@ -116,8 +116,8 @@ export default {
     
     logger.info("Registering AegisMemory plugin");
     
-    // Load configuration
-    const config = await loadConfig(api.config || {}, process.env);
+    // Load configuration (synchronous)
+    const config = loadConfig(api.pluginConfig || api.config || {}, process.env);
     
     // Initialize state and queue
     const dataDir = join(homedir(), ".openclaw", "aegismemory");
