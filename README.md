@@ -313,16 +313,69 @@ Beautiful visual memory viewer:
    - Free, decentralized storage
    - Content-addressed (CID)
    - Encrypted with AES-256-GCM
+   - **Every conversation saved immediately**
 
 2. **X1 Blockchain**: Stores cryptographic proofs
    - Immutable on-chain anchoring
-   - Small memo transactions (0.002 XNT)
+   - Small memo transactions (~0.000005 SOL)
    - Verifiable integrity
+   - **Daily anchoring by default**
+
+### How It Works
+
+#### Every Conversation Turn (Automatic)
+1. ✅ **Capture**: Messages extracted from OpenClaw `agent_end` hook
+2. 🔐 **Encrypt**: AES-256-GCM with wallet-derived key
+3. 📤 **Upload**: Saved to IPFS immediately via vault.x1.xyz API
+4. 🔗 **Chain**: New CID links to previous CID (`prev_cid`)
+5. 💾 **State**: Local state updated with latest CID
+
+**Result**: Every conversation is encrypted and stored on IPFS within seconds.
+
+#### Daily On-Chain Anchoring (Automatic)
+1. 🔍 **Check**: System checks if already anchored today
+2. ⚓ **Anchor**: If new day, writes CID + SHA256 to Solana Memo Program
+3. ⛓️ **Confirm**: Transaction confirmed on X1 blockchain
+4. 📅 **Update**: `lastAnchoredDate` updated to current date
+
+**Result**: Once per day, your memory chain gets an immutable timestamp proof on-chain.
+
+### Storage Locations
+
+**IPFS (Encrypted Data):**
+- ✅ Vault API: `https://vault.x1.xyz/ipfs/api/v0/cat?arg=<CID>`
+- ✅ Public IPFS: `https://ipfs.io/ipfs/<CID>`
+- ❌ Vault Gateway: Disabled (use API instead)
+
+**On-Chain (Timestamp Proofs):**
+- View transactions: `https://explorer.x1.xyz/address/9SksTs4MBiqpK3aBxDhzrVforfsR2u9hAaawdrFsNPjd`
+- RPC: `https://rpc.mainnet.x1.xyz`
+
+### Anchor Frequency Options
+
+**Daily (Default):**
+```bash
+# Anchors once per calendar day (UTC)
+# Cost: ~0.000005 SOL/day (~$0.0001/day)
+# Default behavior - no configuration needed
+```
+
+**Every Save (Optional):**
+```bash
+# In ~/.openclaw/.env
+AEGISMEMORY_ANCHOR_FREQUENCY=every_save
+
+# Anchors every single conversation
+# Cost: ~0.000005 SOL per conversation
+# Maximum security and verifiability
+```
 
 ### Memory Flow
 
 ```
-Chat Turn → Capture → Encrypt → Queue → IPFS Upload → X1 Anchor → State Update
+Chat Turn → Capture → Encrypt → IPFS Upload (immediate) → State Update
+                                      ↓
+                              Daily Check → Anchor to X1 (once/day)
 ```
 
 ### TOON Format
@@ -378,23 +431,38 @@ sha256: 94125c04...
 
 ### X1 Blockchain Costs
 
-- **Transaction Fee**: 0.002 XNT (flat rate)
-- **IPFS Storage**: FREE (X1 Vault)
-- **Example**: 0.01 SOL = ~5 transactions
+**IPFS Storage:**
+- **Cost**: FREE (X1 Vault)
+- **Frequency**: Every conversation (immediate)
+- **Size**: ~1,100 bytes encrypted per conversation
+
+**On-Chain Anchoring:**
+- **Transaction Fee**: ~0.000005 SOL per anchor
+- **Daily Mode**: ~0.000005 SOL/day (~$0.0001/day)
+- **Every-Save Mode**: ~0.000005 SOL per conversation
+
+### Capacity Calculation
+
+**Daily Anchoring (Default):**
+```
+Wallet Balance: 0.976 SOL
+Cost per day: ~0.000005 SOL
+Capacity: ~195,200 days (535+ years)
+```
+
+**Every-Save Anchoring:**
+```
+Wallet Balance: 0.976 SOL
+Cost per conversation: ~0.000005 SOL
+Capacity: ~195,200 conversations
+```
 
 ### Space Efficiency
 
 - **JSON Format**: ~1,370 bytes per memory
 - **TOON Format**: ~742 bytes per memory
 - **Savings**: 46% reduction
-
-### Capacity Calculation
-
-```
-Wallet Balance: 0.988 SOL
-Cost per TX: 0.002 XNT
-Capacity: ~494 transactions
-```
+- **Encrypted**: ~1,100 bytes on IPFS
 
 ---
 
