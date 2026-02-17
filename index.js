@@ -139,29 +139,40 @@ const aegismemoryPlugin = {
     // Start queue processor
     const processQueue = async () => {
       const job = queue.getNext();
-      if (!job) return;
+      if (!job) {
+        // Check queue status periodically
+        const stats = queue.getStats();
+        if (stats.pending > 0 || stats.processing > 0) {
+          logger.debug("📊 Queue status", stats);
+        }
+        return;
+      }
       
       try {
         queue.markProcessing(job.id);
-        logger.info("Processing job", { id: job.id, type: job.type });
+        logger.info("⚙️ Processing job", { id: job.id, type: job.type });
         
         if (job.type === "UPLOAD_MEMORY") {
           await aegis.processUploadJob(job);
           queue.complete(job.id);
-          logger.info("Job completed", { id: job.id, type: "UPLOAD_MEMORY" });
+          logger.info("✅ Job completed", { id: job.id, type: "UPLOAD_MEMORY" });
         } else if (job.type === "ANCHOR_MEMORY") {
           await aegis.processAnchorJob(job);
           queue.complete(job.id);
-          logger.info("Job completed", { id: job.id, type: "ANCHOR_MEMORY" });
+          logger.info("✅ Job completed", { id: job.id, type: "ANCHOR_MEMORY" });
         }
       } catch (error) {
-        logger.error("Job failed", { id: job.id, error: error.message });
+        logger.error("❌ Job failed", { id: job.id, error: error.message, stack: error.stack });
         queue.fail(job.id, error.message, 5000);
       }
     };
     
     // Run queue processor every 5 seconds
+    logger.info("🔄 Starting queue processor (5s interval)");
     const queueInterval = setInterval(processQueue, 5000);
+    
+    // Process immediately on startup
+    processQueue().catch(err => logger.error("Queue processor startup error", { error: err.message }));
     
     // Register lifecycle hooks
     
@@ -207,21 +218,45 @@ const aegismemoryPlugin = {
       if (!config.addEnabled) return;
       
       try {
-        logger.info("Saving agent memories", { sessionKey: ctx.sessionKey });
+        logger.info("🛡️ AegisMemory hook triggered", { 
+          sessionKey: ctx.sessionKey,
+          hasMessages: !!ctx.messages,
+          hasHistory: !!ctx.history,
+          messageCount: (ctx.messages || ctx.history || []).length
+        });
         
-        // Extract conversation from context
-        const conversation = ctx.messages || ctx.history || [];
+        // Build proper context object for aegis.save()
+        const saveCtx = {
+          agentId: ctx.agentId || config.agentId,
+          sessionId: ctx.sessionKey || ctx.sessionId,
+          messages: ctx.messages || ctx.history || [],
+          timestamp: new Date().toISOString()
+        };
         
-        if (conversation.length > 0) {
-          await aegis.save(conversation);
-          logger.info("Memories saved successfully", { messageCount: conversation.length });
-          
-          metrics.inc("memories_saved");
-        } else {
-          logger.warn("No messages to save");
+        if (saveCtx.messages.length === 0) {
+          logger.warn("⚠️ No messages to save in context");
+          return;
         }
+        
+        logger.info("💾 Calling aegis.save()", { 
+          agentId: saveCtx.agentId,
+          sessionId: saveCtx.sessionId,
+          messageCount: saveCtx.messages.length 
+        });
+        
+        await aegis.save(saveCtx);
+        
+        logger.info("✅ Memory saved successfully", { 
+          messageCount: saveCtx.messages.length,
+          agentId: saveCtx.agentId
+        });
+        
+        metrics.inc("memories_saved");
       } catch (error) {
-        logger.error("Failed to save memories", { error: error.message });
+        logger.error("❌ Failed to save memories", { 
+          error: error.message,
+          stack: error.stack
+        });
       }
     });
     
