@@ -180,6 +180,7 @@ export default {
     
     // Hook: Before agent starts - recall previous memories
     api.on("before_agent_start", async (event, ctx) => {
+      console.log("🔥🔥🔥 AEGISMEMORY before_agent_start HOOK FIRED 🔥🔥🔥");
       logger.info("🎯 before_agent_start CALLED", { 
         recallEnabled: config.recallEnabled,
         hasEvent: !!event,
@@ -227,6 +228,9 @@ export default {
     
     // Hook: After agent ends - save new memories
     api.on("agent_end", async (event, ctx) => {
+      console.log("🔥🔥🔥 AEGISMEMORY agent_end HOOK FIRED 🔥🔥🔥");
+      console.log("EVENT:", JSON.stringify(event, null, 2));
+      console.log("CTX:", JSON.stringify(ctx, null, 2));
       logger.info("🎯 agent_end CALLED", { 
         addEnabled: config.addEnabled,
         hasEvent: !!event,
