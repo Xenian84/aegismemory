@@ -17,7 +17,7 @@ export default {
   id: "aegismemory",
   name: "AegisMemory",
   description: "Production-grade encrypted memory storage with CID chaining and on-chain anchoring",
-  kind: "lifecycle",
+  kind: "memory",
   
   configSchema: {
     type: "object",
@@ -176,10 +176,25 @@ export default {
     
     // Register lifecycle hooks using api.on() (OpenClaw 2026.2.9+)
     
+    logger.info("🔗 Registering before_agent_start hook", { recallEnabled: config.recallEnabled });
+    
     // Hook: Before agent starts - recall previous memories
     api.on("before_agent_start", async (event, ctx) => {
-      if (!config.recallEnabled) return;
-      if (!event?.prompt || event.prompt.length < 5) return;
+      logger.info("🎯 before_agent_start CALLED", { 
+        recallEnabled: config.recallEnabled,
+        hasEvent: !!event,
+        hasPrompt: !!event?.prompt,
+        promptLength: event?.prompt?.length 
+      });
+      
+      if (!config.recallEnabled) {
+        logger.info("⏭️ Recall disabled, skipping");
+        return;
+      }
+      if (!event?.prompt || event.prompt.length < 5) {
+        logger.info("⏭️ No prompt or too short, skipping");
+        return;
+      }
       
       try {
         logger.info("🛡️ Recalling memories", { sessionKey: ctx?.sessionKey, promptLength: event.prompt.length });
@@ -208,13 +223,25 @@ export default {
       }
     });
     
+    logger.info("🔗 Registering agent_end hook", { addEnabled: config.addEnabled });
+    
     // Hook: After agent ends - save new memories
     api.on("agent_end", async (event, ctx) => {
-      if (!config.addEnabled) return;
+      logger.info("🎯 agent_end CALLED", { 
+        addEnabled: config.addEnabled,
+        hasEvent: !!event,
+        success: event?.success,
+        messageCount: event?.messages?.length 
+      });
+      
+      if (!config.addEnabled) {
+        logger.info("⏭️ Add disabled, skipping");
+        return;
+      }
       
       try {
         if (!event?.success || !event?.messages?.length) {
-          logger.debug("⚠️ No messages to save", { success: event?.success, messageCount: event?.messages?.length });
+          logger.info("⏭️ No messages to save", { success: event?.success, messageCount: event?.messages?.length });
           return;
         }
         

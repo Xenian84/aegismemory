@@ -3,7 +3,7 @@
   "name": "AegisMemory",
   "version": "2.0.0",
   "description": "Production encrypted memory storage with CID chaining and on-chain anchoring",
-  "kind": "lifecycle",
+  "kind": "memory",
   "entrypoint": "./index.js",
   "author": "AegisMemory Contributors",
   "repository": "https://github.com/yourusername/aegismemory",
