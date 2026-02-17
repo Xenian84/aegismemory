@@ -96,7 +96,7 @@ export default {
     required: ["walletPubkey"]
   },
   
-  async register(api) {
+  register(api) {
     const logger = createLogger({ namespace: "aegismemory" });
     
     // Simple metrics tracking
