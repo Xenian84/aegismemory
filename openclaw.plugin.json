@@ -1,7 +1,7 @@
 {
   "id": "aegismemory",
   "name": "AegisMemory",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "description": "Production encrypted memory storage with CID chaining and on-chain anchoring",
   "kind": "memory",
   "entrypoint": "./index.js",

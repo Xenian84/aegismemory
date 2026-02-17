@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org/)
-[![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](https://github.com/Xenian84/aegismemory/releases)
+[![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)](https://github.com/Xenian84/aegismemory/releases)
 [![Status](https://img.shields.io/badge/status-production-success)](https://github.com/Xenian84/aegismemory)
 
 ---
@@ -21,7 +21,16 @@
 - 🎯 **OpenClaw Integration**: Seamless memory slot provider
 - 💰 **Cost Effective**: Only 0.002 XNT per memory anchor
 
-### v2.1 Features (NEW)
+### v3.0 Features (NEW)
+- 👤 **Cyberdyne Profiles**: Encrypted user reputation profiles on IPFS
+- 🔐 **Zero-Knowledge Architecture**: AI never sees plaintext profiles
+- 🎯 **Rich Profile Schema**: Reputation, contributions, achievements, communities
+- 🤖 **OpenClaw Tools**: Native integration for Telegram bots (Theo)
+- 📊 **Profile Management**: Full CRUD operations via CLI and tools
+- 🔄 **Version Tracking**: Complete profile history via CID chain
+- 💾 **TOON Format**: 40% smaller profiles, human-readable
+
+### v2.1 Features
 - 🔍 **Semantic Search**: Natural language memory search with vector embeddings
 - 🤝 **Cross-Agent Memory**: Permission-based memory sharing between agents
 - ⏰ **Ephemeral Memories**: Auto-expiring memories for privacy and cost savings
@@ -39,6 +48,7 @@
 - [Quick Start](#quick-start)
 - [Configuration](#configuration)
 - [CLI Usage](#cli-usage)
+- [Cyberdyne Profiles](#cyberdyne-profiles)
 - [Architecture](#architecture)
 - [Security](#security)
 - [Cost Analysis](#cost-analysis)
@@ -236,6 +246,89 @@ Exports decrypted memory to JSON.
 ```
 
 Verify memory integrity and on-chain anchor.
+
+---
+
+## 👤 Cyberdyne Profiles
+
+**NEW in v3.0**: Encrypted user reputation profiles on IPFS with zero-knowledge architecture.
+
+### Quick Start
+
+```bash
+# Create a profile
+./bin/aegismemory.js cyberdyne-create \
+  --telegram-id 5451495644 \
+  --username Skywalker432 \
+  --score 417 \
+  --rank 8 \
+  --tier HARMONIC
+
+# Get a profile
+./bin/aegismemory.js cyberdyne-get --telegram-id 5451495644
+
+# List all profiles
+./bin/aegismemory.js cyberdyne-list
+
+# Get profile stats
+./bin/aegismemory.js cyberdyne-stats --telegram-id 5451495644
+```
+
+### Features
+
+- 🔐 **Client-side encryption** with wallet signatures
+- 📦 **IPFS storage** (free, no XNT required)
+- 🎯 **Zero-knowledge** - AI never sees plaintext
+- 📊 **Rich schema** - Reputation, contributions, achievements
+- 🔄 **Version tracking** via CID chain
+- 💾 **TOON format** - 40% smaller than JSON
+- 🤖 **OpenClaw tools** for bot integration
+
+### Profile Schema
+
+```json
+{
+  "identity": {
+    "telegram_id": 5451495644,
+    "username": "Skywalker432",
+    "display_name": "Skywalker"
+  },
+  "reputation": {
+    "score": 417,
+    "rank": 8,
+    "tier": "HARMONIC",
+    "level": 4,
+    "xp": 17
+  },
+  "contributions": [...],
+  "achievements": [...],
+  "communities": [...],
+  "badges": [...]
+}
+```
+
+### OpenClaw Tools
+
+For Telegram bots (like Theo):
+
+```javascript
+// Create profile
+await ctx.tools.cyberdyne_create_profile({
+  telegram_id: 5451495644,
+  username: "Skywalker432",
+  score: 417,
+  rank: 8
+});
+
+// Get profile
+const result = await ctx.tools.cyberdyne_get_profile({
+  telegram_id: 5451495644
+});
+```
+
+**📖 Full documentation:** [CYBERDYNE_PROFILES.md](./CYBERDYNE_PROFILES.md)
+
+---
 
 ### Replay Queue
 
