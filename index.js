@@ -179,14 +179,23 @@ export default {
     // Hook: Before agent starts - recall previous memories
     api.on("before_agent_start", async (event, ctx) => {
       if (!config.recallEnabled) return;
+      if (!event?.prompt || event.prompt.length < 5) return;
       
       try {
-        logger.info("Recalling memories", { sessionKey: ctx?.sessionKey });
+        logger.info("🛡️ Recalling memories", { sessionKey: ctx?.sessionKey, promptLength: event.prompt.length });
         
-        const memories = await aegis.recall(ctx);
+        // Add timeout to prevent hanging
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Recall timeout after 5s')), 5000)
+        );
+        
+        const memories = await Promise.race([
+          aegis.recall(ctx),
+          timeoutPromise
+        ]);
         
         if (memories && memories.prependContext) {
-          logger.info("Recalled memories", { length: memories.prependContext.length });
+          logger.info("✅ Recalled memories", { length: memories.prependContext.length });
           
           // Return prependContext to inject memories
           return {
@@ -194,7 +203,8 @@ export default {
           };
         }
       } catch (error) {
-        logger.error("Failed to recall memories", { error: error.message });
+        logger.warn("⚠️ Recall failed (non-blocking)", { error: error.message });
+        // Don't throw - let agent continue without memories
       }
     });
     
@@ -208,10 +218,9 @@ export default {
           return;
         }
         
-        logger.info("🛡️ AegisMemory hook triggered", { 
+        logger.info("🛡️ Auto-capture triggered", { 
           sessionKey: ctx?.sessionKey,
-          messageCount: event.messages.length,
-          success: event.success
+          messageCount: event.messages.length
         });
         
         // Build proper context object for aegis.save()
@@ -222,24 +231,23 @@ export default {
           timestamp: new Date().toISOString()
         };
         
-        logger.info("💾 Calling aegis.save()", { 
-          agentId: saveCtx.agentId,
-          sessionId: saveCtx.sessionId,
-          messageCount: saveCtx.messages.length 
+        // Save asynchronously (don't block agent response)
+        aegis.save(saveCtx).then(() => {
+          logger.info("✅ Memory saved", { 
+            messageCount: saveCtx.messages.length,
+            agentId: saveCtx.agentId
+          });
+          metrics.inc("memories_saved");
+        }).catch((error) => {
+          logger.error("❌ Save failed (non-blocking)", { 
+            error: error.message
+          });
         });
         
-        await aegis.save(saveCtx);
-        
-        logger.info("✅ Memory saved successfully", { 
-          messageCount: saveCtx.messages.length,
-          agentId: saveCtx.agentId
-        });
-        
-        metrics.inc("memories_saved");
+        // Return immediately - don't wait for save to complete
       } catch (error) {
-        logger.error("❌ Failed to save memories", { 
-          error: error.message,
-          stack: error.stack
+        logger.warn("⚠️ Auto-capture error (non-blocking)", { 
+          error: error.message
         });
       }
     });
