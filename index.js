@@ -13,11 +13,11 @@ import { VectorDB } from "./lib/vectorDB.js";
 import { homedir } from "os";
 import { join } from "path";
 
-const aegismemoryPlugin = {
+export default {
   id: "aegismemory",
   name: "AegisMemory",
   description: "Production-grade encrypted memory storage with CID chaining and on-chain anchoring",
-  kind: "memory",
+  kind: "lifecycle",
   
   configSchema: {
     type: "object",
@@ -174,39 +174,24 @@ const aegismemoryPlugin = {
     // Process immediately on startup
     processQueue().catch(err => logger.error("Queue processor startup error", { error: err.message }));
     
-    // Register lifecycle hooks
+    // Register lifecycle hooks using api.on() (OpenClaw 2026.2.9+)
     
     // Hook: Before agent starts - recall previous memories
-    api.registerHook("agent:before_start", async (ctx) => {
+    api.on("before_agent_start", async (event, ctx) => {
       if (!config.recallEnabled) return;
       
       try {
-        logger.info("Recalling memories", { sessionKey: ctx.sessionKey });
+        logger.info("Recalling memories", { sessionKey: ctx?.sessionKey });
         
-        const memories = await aegis.recall();
+        const memories = await aegis.recall(ctx);
         
-        if (memories && memories.length > 0) {
-          logger.info("Recalled memories", { count: memories.length });
+        if (memories && memories.prependContext) {
+          logger.info("Recalled memories", { length: memories.prependContext.length });
           
-          // Format memories for context
-          const memoryContext = memories.map((m, i) => {
-            const messages = m.content?.messages || [];
-            return `\n## Memory ${i + 1} (${m.date})\n${messages.map((msg) => 
-              `${msg.role}: ${msg.content}`
-            ).join('\n')}`;
-          }).join('\n\n');
-          
-          // Inject into system message or context
-          if (ctx.systemMessage) {
-            ctx.systemMessage += `\n\n# Previous Conversations\n${memoryContext}`;
-          } else if (ctx.messages) {
-            ctx.messages.unshift({
-              role: "system",
-              content: `# Previous Conversations\n${memoryContext}`
-            });
-          }
-          
-          logger.info("Memories injected into context");
+          // Return prependContext to inject memories
+          return {
+            prependContext: memories.prependContext
+          };
         }
       } catch (error) {
         logger.error("Failed to recall memories", { error: error.message });
@@ -214,29 +199,28 @@ const aegismemoryPlugin = {
     });
     
     // Hook: After agent ends - save new memories
-    api.registerHook("agent:after_end", async (ctx) => {
+    api.on("agent_end", async (event, ctx) => {
       if (!config.addEnabled) return;
       
       try {
+        if (!event?.success || !event?.messages?.length) {
+          logger.debug("⚠️ No messages to save", { success: event?.success, messageCount: event?.messages?.length });
+          return;
+        }
+        
         logger.info("🛡️ AegisMemory hook triggered", { 
-          sessionKey: ctx.sessionKey,
-          hasMessages: !!ctx.messages,
-          hasHistory: !!ctx.history,
-          messageCount: (ctx.messages || ctx.history || []).length
+          sessionKey: ctx?.sessionKey,
+          messageCount: event.messages.length,
+          success: event.success
         });
         
         // Build proper context object for aegis.save()
         const saveCtx = {
-          agentId: ctx.agentId || config.agentId,
-          sessionId: ctx.sessionKey || ctx.sessionId,
-          messages: ctx.messages || ctx.history || [],
+          agentId: ctx?.agentId || config.agentId,
+          sessionId: ctx?.sessionKey || ctx?.sessionId,
+          messages: event.messages,
           timestamp: new Date().toISOString()
         };
-        
-        if (saveCtx.messages.length === 0) {
-          logger.warn("⚠️ No messages to save in context");
-          return;
-        }
         
         logger.info("💾 Calling aegis.save()", { 
           agentId: saveCtx.agentId,
@@ -324,5 +308,3 @@ const aegismemoryPlugin = {
     logger.info("AegisMemory plugin registered successfully");
   }
 };
-
-export default aegismemoryPlugin;
