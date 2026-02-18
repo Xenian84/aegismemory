@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org/)
-[![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)](https://github.com/Xenian84/aegismemory/releases)
+[![Version](https://img.shields.io/badge/version-3.1.0-blue.svg)](https://github.com/Xenian84/aegismemory/releases)
 [![Status](https://img.shields.io/badge/status-production-success)](https://github.com/Xenian84/aegismemory)
 
 ---
@@ -21,7 +21,14 @@
 - 🎯 **OpenClaw Integration**: Seamless memory slot provider
 - 💰 **Cost Effective**: Only 0.002 XNT per memory anchor
 
-### v3.0 Features (NEW)
+### v3.1 Features (NEW)
+- 🤝 **Cross-Agent Memory**: Share memories between different agents
+- 🎫 **Share Tokens**: CID-based sharing with encrypted keys
+- 🔐 **Permission System**: Grant/revoke access to your memories
+- 🔍 **Cross-Agent Queries**: Search other agents' memories
+- 🔄 **Decentralized Sharing**: Works via IPFS, no central server
+
+### v3.0 Features
 - 👤 **Cyberdyne Profiles**: Encrypted user reputation profiles on IPFS
 - 🔐 **Zero-Knowledge Architecture**: AI never sees plaintext profiles
 - 🎯 **Rich Profile Schema**: Reputation, contributions, achievements, communities
@@ -223,6 +230,37 @@ Fetches and decrypts recent memories with keyword extraction.
 
 Natural language semantic search across all memories.
 
+### Cross-Agent Memory Sharing (NEW v3.1)
+
+Share memories between different agents with permission-based access:
+
+```bash
+# Grant permission to another agent
+./bin/aegismemory.js grant --agent WALLET_ADDRESS
+
+# Share a specific memory
+./bin/aegismemory.js share --cid QmXYZ... --agent WALLET_ADDRESS
+
+# Import a shared memory
+./bin/aegismemory.js import --token "aegis://QmXYZ.../WALLET/KEY"
+
+# Query another agent's memories
+./bin/aegismemory.js query --from WALLET_ADDRESS --search "X1 network" --limit 5
+
+# List permissions
+./bin/aegismemory.js permissions
+
+# Revoke permission
+./bin/aegismemory.js revoke --agent WALLET_ADDRESS
+```
+
+**Features:**
+- 🔐 **Permission-based**: Explicit grants required
+- 🎫 **Share tokens**: CID-based sharing with encrypted keys
+- 🔍 **Cross-agent queries**: Search other agents' memories
+- 🔄 **Decentralized**: Works via IPFS, no central server
+- 🔑 **Secure**: Encrypted with wallet-derived keys
+
 ### View (NEW v2.1)
 
 ```bash
@@ -246,6 +284,99 @@ Exports decrypted memory to JSON.
 ```
 
 Verify memory integrity and on-chain anchor.
+
+---
+
+## 🤝 Cross-Agent Memory Sharing
+
+**NEW in v3.1**: Share and query memories between different agents with permission-based access.
+
+### Architecture
+
+Cross-agent memory enables agents to share specific memories or grant persistent access to their entire memory store. All sharing is permission-based and uses encrypted share tokens.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Agent A (Theo)                           │
+│  Wallet: 9Sks...                                            │
+│  Memories: Encrypted with Theo's wallet                    │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                    ┌─────────┴─────────┐
+                    │  Grant Permission  │
+                    │  Share Token       │
+                    └─────────┬─────────┘
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Agent B (Other Bot)                      │
+│  Wallet: 7Xyz...                                            │
+│  Has: Theo's shared key (encrypted)                        │
+│  Can: Read Theo's memories                                  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Share Workflows
+
+#### 1. One-Time Memory Sharing
+
+Share a specific memory via token:
+
+```bash
+# Agent A: Generate share token
+./bin/aegismemory.js share --cid QmXYZ... --agent AgentB_Wallet
+# Output: aegis://QmXYZ.../AgentA_Wallet/encrypted_key
+
+# Agent B: Import the memory
+./bin/aegismemory.js import --token "aegis://QmXYZ.../AgentA_Wallet/encrypted_key"
+```
+
+#### 2. Persistent Permission
+
+Grant ongoing access to all memories:
+
+```bash
+# Agent A: Grant permission
+./bin/aegismemory.js grant --agent AgentB_Wallet
+
+# Agent B: Query Agent A's memories
+./bin/aegismemory.js query --from AgentA_Wallet --search "X1 network" --limit 5
+
+# Agent B: Fetch specific CID
+./bin/aegismemory.js query --cid QmXYZ... --from AgentA_Wallet
+```
+
+#### 3. Permission Management
+
+```bash
+# List all granted permissions
+./bin/aegismemory.js permissions
+
+# Revoke access
+./bin/aegismemory.js revoke --agent AgentB_Wallet
+```
+
+### Share Token Format
+
+Share tokens use the format: `aegis://CID/WALLET/ENCRYPTED_KEY`
+
+- **CID**: IPFS content identifier
+- **WALLET**: Source agent's wallet address
+- **ENCRYPTED_KEY**: Encrypted wallet secret for decryption
+
+### Security Model
+
+1. **Explicit Grants**: All access requires explicit permission
+2. **Encrypted Keys**: Shared keys are encrypted at rest
+3. **Decentralized**: No central permission server
+4. **Revocable**: Permissions can be revoked at any time
+5. **Auditable**: All permissions stored locally
+
+### Use Cases
+
+- **Bot Collaboration**: Multiple bots sharing context
+- **Memory Backup**: Export/import memories between instances
+- **Team Memory**: Shared knowledge base for bot teams
+- **Cross-Context**: Transfer memories between different agents
 
 ---
 

@@ -26,6 +26,13 @@ const commands = {
   view: viewMemory,
   'replay-queue': replayQueue,
   anchor: manualAnchor,
+  // Cross-agent memory commands
+  share: shareMemory,
+  import: importMemory,
+  grant: grantPermission,
+  revoke: revokePermission,
+  query: queryAgent,
+  permissions: listPermissions,
   // Cyberdyne Profile commands
   'cyberdyne-create': cyberDyneCreate,
   'cyberdyne-get': cyberDyneGet,
@@ -805,6 +812,34 @@ Commands:
   anchor              Manually anchor a memory
     --cid <cid>       CID to anchor (required)
 
+Cross-Agent Memory Commands:
+  share               Share a memory with another agent
+    --cid <cid>       CID to share (required)
+    --agent <wallet>  Recipient's wallet address (optional)
+    --simple          Generate simple token (requires pre-granted permission)
+    --grant           Also grant persistent permission to recipient
+  
+  import              Import a shared memory
+    --token <token>   Share token from another agent (required)
+                      OR use --cid + --from for manual import
+    --cid <cid>       CID to import (alternative to --token)
+    --from <wallet>   Source agent's wallet (required with --cid)
+    --save            Save permission for future queries
+  
+  grant               Grant permission to another agent
+    --agent <wallet>  Agent's wallet address (required)
+  
+  revoke              Revoke permission from an agent
+    --agent <wallet>  Agent's wallet address (required)
+  
+  query               Query another agent's memories
+    --from <wallet>   Source agent's wallet (required)
+    --search <query>  Semantic search query (optional)
+    --limit <N>       Max results (default: 10)
+    --cid <cid>       Fetch specific CID (requires --from)
+  
+  permissions         List all granted permissions
+
 Cyberdyne Profile Commands:
   cyberdyne-create    Create a new Cyberdyne profile
     --telegram-id N   Telegram user ID (required)
@@ -860,6 +895,13 @@ Examples:
   aegismemory status
   aegismemory recall --limit 5
   aegismemory search "validator requirements"
+  
+  # Cross-agent memory sharing
+  aegismemory share --cid QmXYZ... --agent WALLET_ADDRESS
+  aegismemory import --token "aegis://QmXYZ.../WALLET/KEY"
+  aegismemory grant --agent WALLET_ADDRESS
+  aegismemory query --from WALLET_ADDRESS --search "X1 network" --limit 5
+  aegismemory permissions
   
   # Cyberdyne profile commands
   aegismemory cyberdyne-create --telegram-id 12345 --username skywalker --score 417 --rank 8 --tier HARMONIC
@@ -1360,6 +1402,326 @@ async function cyberDyneExport(args) {
   console.log(`\n✅ Profile exported to: ${output}`);
   console.log(`Format: ${format}`);
   console.log(`Size: ${content.length} bytes\n`);
+}
+
+/**
+ * Share a memory with another agent
+ */
+async function shareMemory(args) {
+  const { config, logger } = await init();
+  const { generateShareToken, generateSimpleShareToken } = await import('../lib/shareToken.js');
+  const { PermissionRegistry } = await import('../lib/permissions.js');
+  
+  const cid = getArg(args, '--cid');
+  const agent = getArg(args, '--agent') || getArg(args, '--to');
+  const simple = args.includes('--simple');
+  
+  if (!cid) {
+    console.error('❌ Required: --cid <IPFS_CID>');
+    console.error('Usage: aegismemory share --cid QmXYZ... --agent WALLET_ADDRESS');
+    process.exit(1);
+  }
+  
+  console.log(`\n📤 Sharing memory: ${cid}\n`);
+  
+  // Generate share token
+  let token;
+  if (simple || !agent) {
+    // Simple token (requires pre-granted permission)
+    token = generateSimpleShareToken(cid, config.walletPubkey);
+    console.log('✅ Share token generated (simple mode):\n');
+    console.log(`   ${token}\n`);
+    console.log('⚠️  Recipient must have permission to access your memories.');
+    console.log('   Use: aegismemory grant --agent WALLET_ADDRESS\n');
+  } else {
+    // Full token with encrypted key
+    token = await generateShareToken(cid, config.walletPubkey, config.walletSecretKeyBase58, agent);
+    console.log('✅ Share token generated:\n');
+    console.log(`   ${token}\n`);
+    console.log(`📋 Share this token with: ${agent}`);
+    console.log('   They can import it using: aegismemory import --token "..."\n');
+    
+    // Optionally grant permission
+    if (args.includes('--grant')) {
+      const permissions = new PermissionRegistry(config, logger);
+      await permissions.grant(agent, config.walletSecretKeyBase58);
+      console.log(`✅ Also granted persistent permission to ${agent}\n`);
+    }
+  }
+}
+
+/**
+ * Import a shared memory
+ */
+async function importMemory(args) {
+  const { config, logger } = await init();
+  const { parseShareToken, decryptShareToken, parseSimpleShareToken } = await import('../lib/shareToken.js');
+  const { CrossAgentMemory } = await import('../lib/crossAgentMemory.js');
+  const { PermissionRegistry } = await import('../lib/permissions.js');
+  
+  const token = getArg(args, '--token');
+  const cid = getArg(args, '--cid');
+  const from = getArg(args, '--from');
+  const save = args.includes('--save');
+  
+  if (!token && (!cid || !from)) {
+    console.error('❌ Required: --token "aegis://..." OR (--cid + --from)');
+    console.error('Usage: aegismemory import --token "aegis://QmXYZ.../WALLET/KEY"');
+    console.error('   OR: aegismemory import --cid QmXYZ... --from WALLET_ADDRESS');
+    process.exit(1);
+  }
+  
+  let importCid, sourceWallet, sharedKey;
+  
+  if (token) {
+    console.log(`\n📥 Importing from share token...\n`);
+    
+    // Parse token
+    try {
+      const parsed = parseShareToken(token);
+      importCid = parsed.cid;
+      sourceWallet = parsed.wallet;
+      
+      // Decrypt the shared key
+      sharedKey = await decryptShareToken(token, config.walletSecretKeyBase58);
+      
+      console.log(`Source:  ${sourceWallet}`);
+      console.log(`CID:     ${importCid}\n`);
+    } catch (error) {
+      // Try simple token format
+      try {
+        const parsed = parseSimpleShareToken(token);
+        importCid = parsed.cid;
+        sourceWallet = parsed.wallet;
+        
+        // Need to get shared key from permissions
+        const permissions = new PermissionRegistry(config, logger);
+        await permissions.init();
+        sharedKey = await permissions.getSharedKey(sourceWallet);
+        
+        if (!sharedKey) {
+          console.error(`❌ No permission found for ${sourceWallet}`);
+          console.error('   Ask them to grant you access first.');
+          process.exit(1);
+        }
+        
+        console.log(`Source:  ${sourceWallet}`);
+        console.log(`CID:     ${importCid}\n`);
+      } catch (err) {
+        console.error(`❌ Invalid token format: ${error.message}`);
+        process.exit(1);
+      }
+    }
+  } else {
+    // Manual CID + wallet
+    importCid = cid;
+    sourceWallet = from;
+    
+    console.log(`\n📥 Importing memory...\n`);
+    console.log(`Source:  ${sourceWallet}`);
+    console.log(`CID:     ${importCid}\n`);
+    
+    // Get shared key from permissions
+    const permissions = new PermissionRegistry(config, logger);
+    await permissions.init();
+    sharedKey = await permissions.getSharedKey(sourceWallet);
+    
+    if (!sharedKey) {
+      console.error(`❌ No permission found for ${sourceWallet}`);
+      console.error('   Ask them to grant you access first.');
+      process.exit(1);
+    }
+  }
+  
+  // Import the memory
+  const permissions = new PermissionRegistry(config, logger);
+  await permissions.init();
+  
+  const crossAgent = new CrossAgentMemory(config, permissions, null, null, logger);
+  const memory = await crossAgent.importMemory(importCid, sourceWallet, sharedKey, { saveLocally: save });
+  
+  console.log('✅ Memory imported successfully!\n');
+  console.log(`Schema:      ${memory.schema || 'N/A'}`);
+  console.log(`Timestamp:   ${memory.timestamp || memory.created_at || 'N/A'}`);
+  console.log(`Messages:    ${memory.messages?.length || 'N/A'}`);
+  console.log(`Source:      ${memory.source_agent}`);
+  console.log(`Imported:    ${memory.imported_at}\n`);
+  
+  if (save) {
+    console.log('💾 Permission saved for future queries.\n');
+  }
+}
+
+/**
+ * Grant permission to another agent
+ */
+async function grantPermission(args) {
+  const { config, logger } = await init();
+  const { PermissionRegistry } = await import('../lib/permissions.js');
+  
+  const agent = getArg(args, '--agent') || getArg(args, '--to');
+  
+  if (!agent) {
+    console.error('❌ Required: --agent <WALLET_ADDRESS>');
+    console.error('Usage: aegismemory grant --agent WALLET_ADDRESS');
+    process.exit(1);
+  }
+  
+  console.log(`\n🔐 Granting permission to: ${agent}\n`);
+  
+  const permissions = new PermissionRegistry(config, logger);
+  await permissions.init();
+  
+  const result = await permissions.grant(agent, config.walletSecretKeyBase58);
+  
+  console.log('✅ Permission granted!\n');
+  console.log(`Grantee:     ${result.grantee}`);
+  console.log(`Granted at:  ${result.grantedAt}\n`);
+  console.log(`${agent} can now query your memories using:`);
+  console.log(`   aegismemory query --from ${config.walletPubkey}\n`);
+}
+
+/**
+ * Revoke permission from an agent
+ */
+async function revokePermission(args) {
+  const { config, logger } = await init();
+  const { PermissionRegistry } = await import('../lib/permissions.js');
+  
+  const agent = getArg(args, '--agent') || getArg(args, '--from');
+  
+  if (!agent) {
+    console.error('❌ Required: --agent <WALLET_ADDRESS>');
+    console.error('Usage: aegismemory revoke --agent WALLET_ADDRESS');
+    process.exit(1);
+  }
+  
+  console.log(`\n🔒 Revoking permission from: ${agent}\n`);
+  
+  const permissions = new PermissionRegistry(config, logger);
+  await permissions.init();
+  
+  const revoked = await permissions.revoke(agent);
+  
+  if (revoked) {
+    console.log('✅ Permission revoked!\n');
+    console.log(`${agent} can no longer access your memories.\n`);
+  } else {
+    console.log('⚠️  No permission found for this agent.\n');
+  }
+}
+
+/**
+ * Query another agent's memories
+ */
+async function queryAgent(args) {
+  const { config, logger, state } = await init();
+  const { CrossAgentMemory } = await import('../lib/crossAgentMemory.js');
+  const { PermissionRegistry } = await import('../lib/permissions.js');
+  
+  const from = getArg(args, '--from') || getArg(args, '--agent');
+  const searchQuery = getArg(args, '--search') || getArg(args, '--query');
+  const limit = parseInt(getArg(args, '--limit') || '10', 10);
+  const cid = getArg(args, '--cid');
+  
+  if (!from && !cid) {
+    console.error('❌ Required: --from <WALLET_ADDRESS> OR --cid <CID>');
+    console.error('Usage: aegismemory query --from WALLET_ADDRESS [--search "query"] [--limit 10]');
+    console.error('   OR: aegismemory query --cid QmXYZ... --from WALLET_ADDRESS');
+    process.exit(1);
+  }
+  
+  const permissions = new PermissionRegistry(config, logger);
+  await permissions.init();
+  
+  const crossAgent = new CrossAgentMemory(config, permissions, null, null, logger);
+  
+  // Single CID fetch
+  if (cid) {
+    if (!from) {
+      console.error('❌ --cid requires --from <WALLET_ADDRESS>');
+      process.exit(1);
+    }
+    
+    console.log(`\n🔍 Fetching memory from ${from}...\n`);
+    console.log(`CID: ${cid}\n`);
+    
+    const memory = await crossAgent.fetchMemory(from, cid);
+    
+    console.log('✅ Memory retrieved!\n');
+    console.log(JSON.stringify(memory, null, 2));
+    console.log('');
+    return;
+  }
+  
+  // Query memories
+  console.log(`\n🔍 Querying agent: ${from}\n`);
+  
+  if (searchQuery) {
+    console.log(`Search:  "${searchQuery}"`);
+  }
+  console.log(`Limit:   ${limit}\n`);
+  
+  const memories = await crossAgent.query(from, {
+    search: searchQuery,
+    limit
+  });
+  
+  if (memories.length === 0) {
+    console.log('No memories found.\n');
+    return;
+  }
+  
+  console.log(`✅ Found ${memories.length} memories:\n`);
+  
+  for (const memory of memories) {
+    console.log(`─────────────────────────────────────────`);
+    console.log(`CID:       ${memory.imported_cid || memory.cid || 'N/A'}`);
+    console.log(`Timestamp: ${memory.timestamp || memory.created_at || 'N/A'}`);
+    console.log(`Source:    ${memory.source_agent}`);
+    
+    if (memory.relevance_score) {
+      console.log(`Relevance: ${(memory.relevance_score * 100).toFixed(1)}%`);
+    }
+    
+    if (memory.messages) {
+      console.log(`Messages:  ${memory.messages.length}`);
+      console.log(`Preview:   ${memory.messages[0]?.content?.substring(0, 80) || 'N/A'}...`);
+    }
+    
+    console.log('');
+  }
+}
+
+/**
+ * List permissions
+ */
+async function listPermissions(args) {
+  const { config, logger } = await init();
+  const { PermissionRegistry } = await import('../lib/permissions.js');
+  
+  console.log('\n🔐 Cross-Agent Permissions\n');
+  
+  const permissions = new PermissionRegistry(config, logger);
+  await permissions.init();
+  
+  const list = await permissions.list();
+  
+  if (list.length === 0) {
+    console.log('No permissions granted yet.\n');
+    console.log('Grant access using: aegismemory grant --agent WALLET_ADDRESS\n');
+    return;
+  }
+  
+  console.log(`Total: ${list.length} permission(s)\n`);
+  
+  for (const perm of list) {
+    console.log(`─────────────────────────────────────────`);
+    console.log(`Grantee:    ${perm.grantee}`);
+    console.log(`Granted at: ${perm.grantedAt}`);
+    console.log(`Granted by: ${perm.grantedBy}`);
+    console.log('');
+  }
 }
 
 /**
